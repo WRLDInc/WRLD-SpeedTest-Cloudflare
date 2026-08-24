@@ -1,0 +1,47 @@
+{
+	"name": "@wrldinc/speedtest-cloudflare",
+	"version": "0.1.0",
+	"description": "WRLD-branded live connection test — an Astro gauge component and typed helpers around @cloudflare/speedtest (the engine behind speed.cloudflare.com), with optional provider/location detection via a same-origin Cloudflare Worker endpoint.",
+	"type": "module",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/WRLDInc/WRLD-SpeedTest-Cloudflare.git"
+	},
+	"homepage": "https://github.com/WRLDInc/WRLD-SpeedTest-Cloudflare#readme",
+	"keywords": [
+		"astro-component",
+		"withastro",
+		"speedtest",
+		"cloudflare",
+		"bandwidth",
+		"wrld"
+	],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		},
+		"./SpeedTest.astro": "./SpeedTest.astro"
+	},
+	"files": [
+		"dist",
+		"src",
+		"SpeedTest.astro",
+		"README.md",
+		"LICENSE"
+	],
+	"scripts": {
+		"build": "tsc -p tsconfig.build.json",
+		"prepare": "npm run build",
+		"test": "vitest run",
+		"typecheck": "tsc -p tsconfig.build.json --noEmit"
+	},
+	"dependencies": {
+		"@cloudflare/speedtest": "^1.13.1"
+	},
+	"devDependencies": {
+		"typescript": "^6.0.3",
+		"vitest": "^4.1.10"
+	}
+}

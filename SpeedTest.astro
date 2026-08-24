@@ -1,0 +1,503 @@
+---
+// WRLD live speed test module — the "test my connection" moment. A
+// WRLD-branded gauge: log-scaled dial, accent-primary progress arc
+// (interactive moment, never the warm commerce accent), live Mbps readout
+// while the phases run, then a download/upload/latency/jitter results row
+// and a best-effort "via <provider> · near <city>" detection line. The
+// engine (@cloudflare/speedtest) loads lazily — prefetched when the module
+// scrolls into view, awaited on the first click.
+//
+// Host requirements: the WRLD design-system tokens (--wrld-*) must be on the
+// page, plus the shared wt-cta-glow / wt-arrow keyframes for the idle CTA
+// loop (both degrade silently when absent).
+//
+// Events (bubble from the module root):
+//   wt:speedtest:start     — a run began (stale readings should clear)
+//   wt:speedtest:complete  — detail: SpeedTestResultDetail (src/index.ts)
+import { gaugeFraction } from './dist/index.js';
+
+interface Props {
+	/** Root element id (also the anchor target). */
+	id?: string;
+	/**
+	 * Same-origin endpoint reflecting the Cloudflare Worker `request.cf`
+	 * fields for provider/location detection (see README). Empty string
+	 * disables detection.
+	 */
+	metaUrl?: string;
+}
+const { id = 'wt-speedtest', metaUrl = '/api/connection' } = Astro.props;
+
+// Dial geometry: 240° sweep (210° → −30°), centre (100,100), radius 78.
+const polar = (f: number, r: number) => {
+	const a = ((210 - 240 * f) * Math.PI) / 180;
+	return { x: 100 + r * Math.cos(a), y: 100 - r * Math.sin(a) };
+};
+const arcStart = polar(0, 78);
+const arcEnd = polar(1, 78);
+const arcPath = `M ${arcStart.x.toFixed(2)} ${arcStart.y.toFixed(2)} A 78 78 0 1 1 ${arcEnd.x.toFixed(2)} ${arcEnd.y.toFixed(2)}`;
+// Reference dots along the log dial at 1 / 10 / 100 / 1000 Mbps.
+const ticks = [1, 10, 100, 1000].map((mbps) => polar(gaugeFraction(mbps), 90));
+---
+
+<div id={id} class="wt-st" data-wt-speedtest data-state="idle" data-st-meta-url={metaUrl} role="group" aria-label="Live connection speed test">
+	<div class="wt-st-head">
+		<p class="wt-st-title">How fast is your connection right now?</p>
+		<p class="wt-st-sub">Start with a live test — about 20 seconds, straight from this page. The result picks your bandwidth tier below.</p>
+	</div>
+
+	<div class="wt-st-body">
+		<div class="wt-st-gauge">
+			<svg viewBox="0 0 200 152" aria-hidden="true">
+				<path class="wt-st-track" d={arcPath} pathLength="100"></path>
+				<path class="wt-st-progress" d={arcPath} pathLength="100" data-st-arc></path>
+				{ticks.map((t) => <circle class="wt-st-tick" cx={t.x.toFixed(2)} cy={t.y.toFixed(2)} r="1.6" />)}
+				<text class="wt-st-scale" x={arcStart.x.toFixed(2)} y="150" text-anchor="middle">0</text>
+				<text class="wt-st-scale" x={arcEnd.x.toFixed(2)} y="150" text-anchor="middle">2 Gbps</text>
+			</svg>
+			<div class="wt-st-readout" aria-hidden="true">
+				<span class="wt-st-value" data-st-value>—</span>
+				<span class="wt-st-unit" data-st-unit>Mbps</span>
+			</div>
+		</div>
+
+		<div class="wt-st-side">
+			<p class="wt-st-phase" role="status" data-st-phase></p>
+			<button type="button" class="wt-btn wt-btn-primary wt-st-cta" data-st-start>
+				Test my connection <span class="wt-st-cta-arrow" aria-hidden="true">→</span>
+			</button>
+			<dl class="wt-st-stats" data-st-stats hidden>
+				<div class="wt-st-stat"><dt>Download</dt><dd data-st-down>—</dd></div>
+				<div class="wt-st-stat"><dt>Upload</dt><dd data-st-up>—</dd></div>
+				<div class="wt-st-stat"><dt>Latency</dt><dd data-st-latency>—</dd></div>
+				<div class="wt-st-stat"><dt>Jitter</dt><dd data-st-jitter>—</dd></div>
+			</dl>
+			<p class="wt-st-meta" data-st-meta hidden></p>
+			<button type="button" class="wt-btn wt-btn-outline wt-st-retest" data-st-retest hidden>Test again</button>
+		</div>
+	</div>
+
+	<p class="wt-st-attribution">Measured against Cloudflare&rsquo;s global edge &mdash; the same network that serves this site.</p>
+</div>
+
+<style is:global>
+	.wt-st {
+		border: 1px solid var(--wrld-border-strong);
+		border-radius: var(--wrld-radius-md);
+		background: var(--wrld-bg-subtle);
+		padding: clamp(18px, 2.4vw, 26px);
+		display: flex;
+		flex-direction: column;
+		gap: 18px;
+	}
+	.wt-st-head {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+	.wt-st-title {
+		font-family: var(--wrld-font-display);
+		font-weight: var(--wrld-fw-semibold);
+		font-size: 1.05rem;
+		letter-spacing: 0.01em;
+		margin: 0;
+	}
+	.wt-st-sub {
+		margin: 0;
+		font-size: 13px;
+		line-height: 1.6;
+		font-weight: 300;
+		color: var(--wrld-fg-muted);
+		text-wrap: pretty;
+	}
+	.wt-st-body {
+		display: grid;
+		grid-template-columns: 210px minmax(0, 1fr);
+		gap: 22px;
+		align-items: center;
+	}
+	@container wt-root (max-width: 659.98px) {
+		.wt-st-body {
+			grid-template-columns: minmax(0, 1fr);
+			justify-items: center;
+			text-align: center;
+		}
+		.wt-st-side {
+			align-items: center;
+		}
+	}
+
+	/* ── Gauge ── */
+	.wt-st-gauge {
+		position: relative;
+		width: 210px;
+		max-width: 100%;
+	}
+	.wt-st-gauge svg {
+		display: block;
+		width: 100%;
+		height: auto;
+	}
+	.wt-st-track {
+		fill: none;
+		stroke: var(--wrld-border);
+		stroke-width: 10;
+		stroke-linecap: round;
+	}
+	.wt-st-progress {
+		fill: none;
+		stroke: var(--wrld-accent-primary);
+		stroke-width: 10;
+		stroke-linecap: round;
+		stroke-dasharray: 100 100;
+		stroke-dashoffset: 100; /* driven by script — no CSS transition, the rAF loop owns motion */
+	}
+	.wt-st-tick {
+		fill: var(--wrld-border-strong);
+	}
+	.wt-st-scale {
+		fill: var(--wrld-fg-subtle);
+		font-family: var(--wrld-font-mono);
+		font-size: 9px;
+	}
+	.wt-st-readout {
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: 44%;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 2px;
+	}
+	.wt-st-value {
+		font-family: var(--wrld-font-display);
+		font-weight: var(--wrld-fw-bold);
+		letter-spacing: var(--wrld-ls-display);
+		font-size: 34px;
+		line-height: 1;
+		color: var(--wrld-fg);
+		font-variant-numeric: tabular-nums;
+	}
+	.wt-st-unit {
+		font-family: var(--wrld-font-mono);
+		font-size: 11px;
+		color: var(--wrld-fg-subtle);
+	}
+
+	/* ── Side column: CTA → live phase → results ── */
+	.wt-st-side {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 14px;
+		min-width: 0;
+	}
+	.wt-st-phase {
+		margin: 0;
+		font-family: var(--wrld-font-mono);
+		font-size: 12.5px;
+		color: var(--wrld-fg-muted);
+		min-height: 1.2em;
+	}
+	.wt-st[data-state='error'] .wt-st-phase {
+		color: var(--wrld-status-danger);
+	}
+	.wt-st-cta {
+		cursor: pointer;
+		padding: 14px 26px;
+	}
+	.wt-st-cta[disabled] {
+		opacity: 0.7;
+		cursor: progress;
+	}
+	/* Idle attention loop — same accent glow the hero CTA uses; the host's
+	   global reduced-motion clamp stops it after one 1ms cycle. */
+	.wt-st[data-state='idle'] .wt-st-cta {
+		animation: wt-cta-glow 2.8s var(--wrld-ease-standard) infinite;
+	}
+	.wt-st[data-state='idle'] .wt-st-cta .wt-st-cta-arrow {
+		display: inline-block;
+		animation: wt-arrow 1.5s var(--wrld-ease-standard) infinite;
+	}
+	.wt-st[data-state='running'] .wt-st-cta,
+	.wt-st[data-state='done'] .wt-st-cta,
+	.wt-st[data-state='error'] .wt-st-cta {
+		display: none;
+	}
+	.wt-st-retest {
+		cursor: pointer;
+		font-size: 11px;
+		padding: 10px 20px;
+	}
+	.wt-st-stats {
+		margin: 0;
+		display: grid;
+		grid-template-columns: repeat(4, auto);
+		gap: 6px 22px;
+		justify-content: start;
+	}
+	/* `[hidden]` must win over the display values above (idle/running states). */
+	.wt-st-stats[hidden],
+	.wt-st-retest[hidden],
+	.wt-st-meta[hidden] {
+		display: none;
+	}
+	@container wt-root (max-width: 659.98px) {
+		.wt-st-stats {
+			grid-template-columns: repeat(2, auto);
+			justify-content: center;
+		}
+	}
+	.wt-st-stat {
+		display: flex;
+		flex-direction: column;
+		gap: 3px;
+	}
+	.wt-st-stat dt {
+		font-size: 11px;
+		font-weight: var(--wrld-fw-medium);
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		color: var(--wrld-fg-subtle);
+	}
+	.wt-st-stat dd {
+		margin: 0;
+		font-family: var(--wrld-font-mono);
+		font-size: 15px;
+		color: var(--wrld-fg);
+	}
+	.wt-st-meta {
+		margin: 0;
+		font-size: 12.5px;
+		line-height: 1.6;
+		font-weight: 300;
+		color: var(--wrld-fg-muted);
+		text-wrap: pretty;
+	}
+	.wt-st-attribution {
+		margin: 0;
+		font-size: 11.5px;
+		line-height: 1.6;
+		font-weight: 300;
+		color: var(--wrld-fg-subtle);
+		text-wrap: pretty;
+	}
+</style>
+
+<script>
+	import {
+		buildSpeedTestSnapshot,
+		createSpeedTest,
+		detectConnectionMeta,
+		formatMbps,
+		formatMs,
+		gaugeFraction,
+		loadSpeedTestEngine,
+		locationLabel,
+		prefersReducedMotion,
+		providerLabel,
+		readingFromSummary,
+		type ConnectionMeta,
+		type SpeedTestEngine,
+		type SpeedTestResultDetail,
+	} from './dist/index.js';
+
+	// If a run produces no result within this window, call it dead rather than
+	// leave the gauge spinning forever (e.g. the network dropped mid-test).
+	const RUN_TIMEOUT_MS = 90_000;
+	// Detection is a garnish — never make the results wait on a slow endpoint.
+	const META_TIMEOUT_MS = 2_500;
+
+	document.querySelectorAll<HTMLElement>('[data-wt-speedtest]').forEach(initSpeedTestModule);
+
+	function initSpeedTestModule(root: HTMLElement) {
+		const arc = root.querySelector<SVGPathElement>('[data-st-arc]')!;
+		const valueEl = root.querySelector<HTMLElement>('[data-st-value]')!;
+		const unitEl = root.querySelector<HTMLElement>('[data-st-unit]')!;
+		const phaseEl = root.querySelector<HTMLElement>('[data-st-phase]')!;
+		const startBtn = root.querySelector<HTMLButtonElement>('[data-st-start]')!;
+		const retestBtn = root.querySelector<HTMLButtonElement>('[data-st-retest]')!;
+		const statsEl = root.querySelector<HTMLElement>('[data-st-stats]')!;
+		const downEl = root.querySelector<HTMLElement>('[data-st-down]')!;
+		const upEl = root.querySelector<HTMLElement>('[data-st-up]')!;
+		const latencyEl = root.querySelector<HTMLElement>('[data-st-latency]')!;
+		const jitterEl = root.querySelector<HTMLElement>('[data-st-jitter]')!;
+		const metaEl = root.querySelector<HTMLElement>('[data-st-meta]')!;
+		const metaUrl = root.dataset.stMetaUrl || '';
+
+		const reduced = prefersReducedMotion();
+		let engine: SpeedTestEngine | null = null;
+		let watchdog = 0;
+		let done = false;
+
+		// Prefetch the engine chunk once the module scrolls into view, so the
+		// first click doesn't pay the download — the test still only ever runs
+		// on interaction.
+		if ('IntersectionObserver' in window) {
+			const io = new IntersectionObserver(
+				(entries) => {
+					if (entries.some((en) => en.isIntersecting)) {
+						io.disconnect();
+						loadSpeedTestEngine().catch(() => {
+							/* retried on click */
+						});
+					}
+				},
+				{ rootMargin: '200px' },
+			);
+			io.observe(root);
+		}
+
+		// ── Gauge motion: one rAF lerp drives arc + readout together. Under
+		// prefers-reduced-motion there is no loop — values are painted directly
+		// as each measurement lands, so they simply appear.
+		let targetMbps = 0;
+		let shownMbps = 0;
+		let animating = false;
+
+		function paint(mbps: number) {
+			arc.style.strokeDashoffset = String(100 * (1 - gaugeFraction(mbps)));
+			valueEl.textContent = formatMbps(mbps);
+		}
+		function step() {
+			shownMbps += (targetMbps - shownMbps) * 0.14;
+			if (Math.abs(targetMbps - shownMbps) < Math.max(0.05, targetMbps * 0.005)) shownMbps = targetMbps;
+			paint(shownMbps);
+			if (shownMbps !== targetMbps) {
+				requestAnimationFrame(step);
+			} else {
+				animating = false;
+			}
+		}
+		function setGauge(mbps: number) {
+			targetMbps = mbps;
+			if (reduced) {
+				shownMbps = mbps;
+				paint(mbps);
+				return;
+			}
+			if (!animating) {
+				animating = true;
+				requestAnimationFrame(step);
+			}
+		}
+
+		function setState(state: 'idle' | 'loading' | 'running' | 'done' | 'error') {
+			root.dataset.state = state;
+		}
+		function setPhase(text: string) {
+			phaseEl.textContent = text;
+		}
+		function fail(message: string) {
+			if (done) return;
+			done = true;
+			window.clearTimeout(watchdog);
+			engine?.pause();
+			setState('error');
+			setPhase(message);
+			retestBtn.hidden = false;
+		}
+
+		async function run() {
+			done = false;
+			statsEl.hidden = true;
+			metaEl.hidden = true;
+			retestBtn.hidden = true;
+			unitEl.textContent = 'Mbps';
+			shownMbps = 0;
+			setGauge(0);
+			setState('loading');
+			startBtn.disabled = true;
+			setPhase('Reaching the nearest edge…');
+			root.dispatchEvent(new CustomEvent('wt:speedtest:start', { bubbles: true }));
+
+			// Provider/location detection runs alongside the measurements.
+			const metaPromise: Promise<ConnectionMeta | null> = metaUrl
+				? detectConnectionMeta(metaUrl).catch(() => null)
+				: Promise.resolve(null);
+
+			try {
+				engine = await createSpeedTest();
+			} catch {
+				startBtn.disabled = false;
+				fail('The test module could not load — check your connection and try again.');
+				return;
+			}
+			startBtn.disabled = false;
+			setState('running');
+
+			const current = engine;
+			watchdog = window.setTimeout(() => fail('The test timed out — try again in a moment.'), RUN_TIMEOUT_MS);
+
+			current.onPhaseChange = ({ measurement }) => {
+				if (done) return;
+				if (measurement.type === 'latency') setPhase('Measuring latency…');
+				else if (measurement.type === 'download') setPhase('Measuring download…');
+				else if (measurement.type === 'upload') setPhase('Measuring upload…');
+			};
+			current.onResultsChange = ({ type }) => {
+				if (done) return;
+				const results = current.results;
+				if (type === 'latency') {
+					const latency = results.getUnloadedLatency();
+					if (latency !== undefined) {
+						unitEl.textContent = 'ms';
+						valueEl.textContent = formatMs(latency);
+					}
+					return;
+				}
+				unitEl.textContent = 'Mbps';
+				const bps = type === 'download' ? results.getDownloadBandwidth() : type === 'upload' ? results.getUploadBandwidth() : undefined;
+				if (bps !== undefined) setGauge(bps / 1e6);
+			};
+			current.onError = (message) => {
+				// Individual probe errors can be non-fatal — the engine moves on.
+				// Only surface a failure when no bandwidth number exists at all.
+				console.warn('speedtest:', message);
+				const results = current.results;
+				if (results.getDownloadBandwidth() === undefined && results.getUploadBandwidth() === undefined) {
+					fail('The test could not reach the network — check your connection and try again.');
+				}
+			};
+			current.onFinish = async (results) => {
+				if (done) return;
+				done = true;
+				window.clearTimeout(watchdog);
+				const reading = readingFromSummary(results.getSummary());
+				const meta = await Promise.race([metaPromise, new Promise<null>((r) => setTimeout(() => r(null), META_TIMEOUT_MS))]);
+				const metric = (value: number | undefined, format: (n: number) => string, unit: string) =>
+					value === undefined ? '—' : `${format(value)} ${unit}`;
+				downEl.textContent = metric(reading.downloadMbps, formatMbps, 'Mbps');
+				upEl.textContent = metric(reading.uploadMbps, formatMbps, 'Mbps');
+				latencyEl.textContent = metric(reading.latencyMs, formatMs, 'ms');
+				jitterEl.textContent = metric(reading.jitterMs, formatMs, 'ms');
+				unitEl.textContent = 'Mbps';
+				setGauge(reading.downloadMbps ?? 0);
+				statsEl.hidden = false;
+				retestBtn.hidden = false;
+				const provider = providerLabel(meta);
+				const location = locationLabel(meta);
+				if (provider || location) {
+					metaEl.textContent = [provider ? `via ${provider}` : '', location ? `near ${location}` : '']
+						.filter(Boolean)
+						.join(' · ') + ' — estimated from your network';
+					metaEl.hidden = false;
+				}
+				setState('done');
+				setPhase(
+					reading.downloadMbps === undefined
+						? 'Test finished, but no download number came back — try again.'
+						: `Done — ${formatMbps(reading.downloadMbps)} Mbps down.`,
+				);
+				const detail: SpeedTestResultDetail = { ...reading, snapshot: buildSpeedTestSnapshot(reading, meta), meta };
+				root.dispatchEvent(new CustomEvent<SpeedTestResultDetail>('wt:speedtest:complete', { bubbles: true, detail }));
+			};
+
+			current.play();
+		}
+
+		startBtn.addEventListener('click', run);
+		retestBtn.addEventListener('click', run);
+	}
+</script>
