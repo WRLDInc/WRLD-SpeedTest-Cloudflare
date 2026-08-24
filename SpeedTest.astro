@@ -452,13 +452,10 @@ const ticks = [1, 10, 100, 1000].map((mbps) => polar(gaugeFraction(mbps), 90));
 				if (bps !== undefined) setGauge(bps / 1e6);
 			};
 			current.onError = (message) => {
-				// Individual probe errors can be non-fatal — the engine moves on.
-				// Only surface a failure when no bandwidth number exists at all.
+				// Individual probe errors are non-fatal — the engine moves on to
+				// the next measurement, and a genuinely dead network is caught by
+				// the run watchdog instead of a premature failure here.
 				console.warn('speedtest:', message);
-				const results = current.results;
-				if (results.getDownloadBandwidth() === undefined && results.getUploadBandwidth() === undefined) {
-					fail('The test could not reach the network — check your connection and try again.');
-				}
 			};
 			current.onFinish = async (results) => {
 				if (done) return;
